@@ -34,13 +34,13 @@ To encrypt or decrypt real files, edit main.rs and uncomment the file-processing
 ```
 Then run again: `cargo run --release`
 
-##Project Status
+## Project Status
   - My first real Rust project 🎉
   - Still very much a learning / hobby implementation
   - Planning to possibly refactor it into a proper library + CLI tool later
   - Very open to feedback: code structure, bugs, performance ideas, safety concerns, naming, etc.
 
-##License
+## License
 MIT License (LICENSE)
 Feel free to use the code to learn, experiment, fork, or improve it.
 Made with ❤️ and countless hours of trial & error.
