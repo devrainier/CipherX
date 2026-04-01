@@ -73,7 +73,7 @@ impl CipherX {
         let master_key = Self::create_master_key(&pre_pass, salt);
         let expanded_key = Self::create_expanded_key(master_key);
         
-        CipherX {
+        Self {
             master_key: *master_key,
             expanded_key: Arc::new(expanded_key),
             mode: true,
