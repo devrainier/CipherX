@@ -292,16 +292,23 @@ impl CipherX {
         
         let mut i: usize = vec.len() - 1;
         let added_val = vec[i];
-        let mut num: u8 = 0;
+        let padded_size: u16 = if added_val == 0 { 256 }
+        else { added_val.into() };
+       
+        println!("Added size : {}", added_val);
+        println!("Padded_size : {}", padded_size);
+
+        let mut num: u16 = 0;
 
         loop {
-            if  num < added_val && vec[i] == added_val {
+            
+            if  num < padded_size && vec[i] == added_val {
                 vec.pop();
                 num += 1;
             }
             else {
                 
-                if num == added_val {
+                if num == padded_size {
                     return Ok(());
                 }
                 else {
@@ -439,6 +446,37 @@ impl CipherX {
 }
 
 
+#[cfg(test)]
+mod tests {
+    use crate::CipherX;
+
+    #[test]
+    fn padding_test() {
+        let vec = vec![16u8; 100_000_000];
+        let length = vec.len();
+
+        let padded_vec = CipherX::pad(&vec, true);
+        let needed_size: usize = 256 - (length % 256);
+        
+        assert_eq!(padded_vec.len(), (length + needed_size));
+    }
+
+
+    #[test]
+    fn unpadding_test() {
+        let vec = vec![16u8; 100_000_000];
+        let length = vec.len();
+
+        let mut padded_vec = CipherX::pad(&vec, true);
+
+        let _ = CipherX::unpad(&mut padded_vec).unwrap();
+
+        assert_eq!(length, vec.len());
+
+    }
+
+
+}
 
 
 

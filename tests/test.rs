@@ -96,11 +96,10 @@ fn test_empty_file() {
 
 }	
 
-/*
 #[test]
 fn test_large_input() {
     let mut cipherx = CipherX::new("devrainier", "pass2222");
-    let data = vec![0u8; 104_857_600]; // 100 MB
+    let data = vec![0u8; 100_000_000]; 
 
     let encrypted = cipherx.process(&data);
 
@@ -109,4 +108,4 @@ fn test_large_input() {
 
     assert_eq!(decrypted, data);
 }
-*/
+
