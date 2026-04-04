@@ -98,7 +98,7 @@ impl CipherX {
     }
     
     
-    fn create_salt<'a> (pass: &[u8; 256], salt: &'a mut [u8; 256]) -> &'a mut[u8; 256] {
+    fn create_salt<'a> (pass: &[u8; 256], salt: &'a mut [u8; 256]) -> &'a mut [u8; 256] {
         
         for _ in 0..100000 {
             Self::encrypt_helper(pass, salt);
@@ -295,9 +295,6 @@ impl CipherX {
         let padded_size: u16 = if added_val == 0 { 256 }
         else { added_val.into() };
        
-        println!("Added size : {}", added_val);
-        println!("Padded_size : {}", padded_size);
-
         let mut num: u16 = 0;
 
         loop {
@@ -448,7 +445,161 @@ impl CipherX {
 
 #[cfg(test)]
 mod tests {
-    use crate::CipherX;
+   use crate::CipherX;
+   use crate::cipherx::cipherx::{SBOX, INV_SBOX, SHIFT_ROWS, INV_SHIFT_ROWS};
+
+    #[test]
+    fn create_256_bytes_test() {
+       let pass1 = "password1".as_bytes();
+
+       let block1 = CipherX::create_256_bytes(pass1);
+       let block1_again = CipherX::create_256_bytes(pass1);
+       
+        assert_eq!(256, block1.len());
+        assert_eq!(block1, block1_again);
+
+        let pass2 = "password2".as_bytes();
+        let block2 = CipherX::create_256_bytes(pass2);
+
+        assert_ne!(block1, block2);
+        assert!(block1.iter().any(|&b| b != 0));
+    }
+
+
+    #[test]
+    fn create_salt_test() {
+        let pass = CipherX::create_256_bytes("passqwerty".as_bytes());
+
+        let mut salt1 = [0u8; 256];
+        let mut salt2 = [0u8; 256];
+
+        CipherX::create_salt(&pass, &mut salt1);
+        CipherX::create_salt(&pass, &mut salt2);
+
+        assert_eq!(salt1, salt2);
+        
+        let pass2 = CipherX::create_256_bytes("qwertypass".as_bytes());
+        let mut salt3 = [0u8; 256];
+        CipherX::create_salt(&pass2, &mut salt3);
+
+        assert_ne!(salt1, salt3);
+    }
+
+
+    #[test]
+    fn create_master_key_test() {
+        let pass = CipherX::create_256_bytes("master_key_password".as_bytes());
+
+        let mut salt1 = [0u8; 256];
+        let mut salt2 = [0u8; 256];
+
+        CipherX::create_master_key(&pass, &mut salt1);
+        CipherX::create_master_key(&pass, &mut salt2);
+
+        assert_eq!(salt1, salt2);
+       
+        let pass2 = CipherX::create_256_bytes("master_key_password2".as_bytes());
+        let mut salt3 = [0u8; 256];
+        CipherX::create_master_key(&pass2, &mut salt3);
+
+        assert_ne!(salt1, salt3);
+    }
+
+
+    #[test]
+    fn create_expanded_key_test() {
+        let key = vec![1u8; 256]; 
+        let expanded = CipherX::create_expanded_key(&key);
+
+        assert_eq!(expanded.len(), 3072);
+        assert_eq!(&expanded[0..256], &key[..]);
+
+        let expanded2 = CipherX::create_expanded_key(&key);
+        assert_eq!(expanded, expanded2);
+
+        let key2 = vec![2u8; 256];
+        let expanded3 = CipherX::create_expanded_key(&key2);
+        assert_ne!(expanded, expanded3);
+    }
+
+
+    #[test]
+    fn get_keys_test() {
+        let cipherx = CipherX::new("user", "password");
+
+        let master_key = cipherx.get_master_key();
+        let expanded_key = cipherx.get_expanded_key();
+
+        assert_eq!(master_key.len(), 256);
+        assert_eq!(expanded_key.len(), 3072);
+
+        assert_eq!(master_key, cipherx.get_master_key());
+        assert_eq!(expanded_key, cipherx.get_expanded_key());
+    }
+
+
+    #[test]
+    fn xor_test() {
+        let keys = vec![1u8; 256];
+        let mut block = vec![2u8; 256];
+        let expected_block1 = vec![3u8; 256];
+
+        CipherX::xor(&keys, &mut block);
+
+        assert_eq!(block, expected_block1);
+        
+        // the original block
+        let expected_block2 = vec![2u8; 256];
+        CipherX::xor(&keys, &mut block);
+        assert_eq!(block, expected_block2);
+
+    }
+
+
+    #[test]
+    fn sub_bytes_test() {
+        let original_data: Vec<u8> = (0..=255).collect();
+        let mut block = original_data.clone();
+        
+        // to encrypt, block will be equal to SBOX table
+        CipherX::sub_bytes(&mut block, &SBOX);
+        assert_eq!(block, &SBOX);
+        
+        // to decrypt, block will go back to original
+        CipherX::sub_bytes(&mut block, &INV_SBOX);
+        assert_eq!(block, original_data);
+    }
+
+    
+    #[test]
+    fn test_shift_rows() {
+        let original_data: Vec<u8> = (0..=255).collect();
+        let mut block = original_data.clone();
+        
+        // to encrypt
+        CipherX::shift_rows(&mut block, &SHIFT_ROWS);
+        
+        // to decrypt
+        CipherX::shift_rows(&mut block, &INV_SHIFT_ROWS);
+
+        assert_eq!(block, original_data);
+    }
+
+
+   #[test]
+    fn mix_column_test() {
+    let original_data: Vec<u8> = (0..=255).collect();
+    let mut block = original_data.clone();
+    
+    // to encrypt
+    CipherX::mix_column(&mut block, true); 
+
+    // to decrypt
+    CipherX::mix_column(&mut block, false);
+
+    assert_eq!(block, original_data);
+    }
+
 
     #[test]
     fn padding_test() {
