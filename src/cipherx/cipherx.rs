@@ -274,10 +274,11 @@ impl CipherX {
 
         if mode {
             let mut vec = vec![needed_size as u8; length + needed_size];
+        
             for (i, val) in data.iter().enumerate() {
                 vec[i] = *val;
             }
- 
+         
             vec
         }
         else {
@@ -289,32 +290,30 @@ impl CipherX {
 
   
      fn unpad(vec: &mut Vec<u8>) -> Result<(), String> {   
-        
+     
         let mut i: usize = vec.len() - 1;
         let added_val = vec[i];
         let padded_size: u16 = if added_val == 0 { 256 }
         else { added_val.into() };
        
-        let mut num: u16 = 0;
+        let mut num: u16 = 1;
 
         loop {
             
-            if  num < padded_size && vec[i] == added_val {
-                vec.pop();
-                num += 1;
-            }
-            else {
-                
-                if num == padded_size {
-                    return Ok(());
+            if  num <= padded_size {
+                if vec[i] == added_val {
+                    vec.pop();
+                    num += 1;
                 }
                 else {
-                    return Err("Unpadding failed".into());
+                    return Err("Invalid padding".into());
                 }
             }
+            else if num > padded_size {
+                return Ok(());
+            }
 
-            i -= 1;
-           
+            i -= 1;           
         }
 
     }    
@@ -343,7 +342,7 @@ impl CipherX {
 
     
     pub fn process(&self, data: &[u8]) -> Vec<u8> {
-   
+  
        if data.is_empty() {
             return vec![];
         }
@@ -393,21 +392,27 @@ impl CipherX {
     }
 
 
-    pub fn file(&mut self, input_path: &str) {
+    pub fn file(&mut self, input_path: &str) -> Result<(), String> {
 
         let data = fs::read(input_path);
         let vec: Vec<u8>;
 
         match data {
             Ok(val) => { vec = val; },
-            Err(_) => { panic!("\n[FILE ERROR] >> {} does not exists\n", input_path); },
+            Err(_) => { 
+                let message = format!("\n[FILE ERROR] >> {} does not exists", input_path);
+                return Err(message);
+            },
         }
 
         if vec.is_empty() {
+         
             let mut file_name = input_path.to_string();
             file_name.push_str(".enc");
 
             let _ = fs::write(file_name, "".as_bytes());
+
+            Ok(())
         }
         else {
             let file_name: String;
@@ -425,17 +430,23 @@ impl CipherX {
             }
             else {
                 let decrypted = self.process(&vec);
-                let mut temp_vec = (&decrypted[0..255]).to_vec();
+                let mut temp_vec = (&decrypted[0..256]).to_vec();
 
                 let _ = Self::unpad(&mut temp_vec);
 
-                file_name = String::from_utf8(temp_vec).unwrap();
+                let try_file = String::from_utf8(temp_vec);
 
-                (&decrypted[255..]).to_vec()
+                match try_file {
+                    Ok(val) => { file_name = val; },
+                    Err(_) => { return Err("Invalid File".into()); },
+                }
+
+                (&decrypted[256..]).to_vec()
             };
 
             let _ = fs::write(file_name, &mut result);
-
+            
+            Ok(())
         }
     }
   
