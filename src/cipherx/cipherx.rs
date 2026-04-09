@@ -1,6 +1,7 @@
 use std::sync::Arc;	
-use std::fs;
+use std::fs::{self, File};
 use std::thread;
+use std::io::{self, BufReader, BufWriter, Read, Write, Seek, SeekFrom};
 
 
 use super::table::{SBOX, INV_SBOX, SHIFT_ROWS, INV_SHIFT_ROWS};
@@ -58,6 +59,7 @@ pub struct CipherX {
     master_key: [u8; 256],
     expanded_key: Arc<Vec<u8>>, 
     mode: bool,
+    stream: bool,
 }
 
 
@@ -76,6 +78,7 @@ impl CipherX {
             master_key: *master_key,
             expanded_key: Arc::new(expanded_key),
             mode: true,
+            stream: false,
         }
     }
 
@@ -269,6 +272,7 @@ impl CipherX {
 
 
     fn pad(data: &[u8], mode: bool) -> Vec<u8> {
+ 
         let length: usize = data.len();
         let needed_size: usize = 256 - (length % 256);
 
@@ -340,29 +344,39 @@ impl CipherX {
             else { false };
     }
 
+
+    pub fn set_stream(&mut self, mode: bool) {
+        self.stream = mode;
+    }
+
     
     pub fn process(&self, data: &[u8]) -> Vec<u8> {
-  
+ 
        if data.is_empty() {
             return vec![];
         }
 
         let mode = self.mode;
-        
-        let mut converted_data = Self::pad(&data, mode);
-        let (total_threads, min, max) = Self::get_cpu_info();
+                
+        let mut converted_data = if !self.stream {
+            Self::pad(&data, mode)
+        }
+        else {
+            data.to_vec()
+        };
 
+        let (total_threads, min, max) = Self::get_cpu_info();
+        
         let length = converted_data.len();
         let total_blocks = length / 256;
         let whole_num = total_blocks / total_threads;
         
         let size: usize = if whole_num == 0 { min }
         else { max };
-        
+
         thread::scope(|s| {
 
             for block in converted_data.chunks_mut(size) {
-
                 s.spawn(move || {
                     let cloned_key = Arc::clone(&self.expanded_key);
                     let expanded_key = &cloned_key;
@@ -383,7 +397,7 @@ impl CipherX {
         });
 
 
-        if !mode {
+        if !mode && !self.stream {
             let _ = Self::unpad(&mut converted_data);
         }
 
@@ -449,7 +463,96 @@ impl CipherX {
             Ok(())
         }
     }
+
   
+
+    pub fn file_stream(&mut self, input: &str) -> Result<(), String> {
+        self.stream = true;
+
+        let mode = self.mode;
+        let (_, min, max) = Self::get_cpu_info();
+    
+        let mut file = File::open(input).unwrap();
+        let length = file.metadata().unwrap().len() as usize;
+
+        let mut reader = BufReader::new(file);
+   
+        let mut writer = if mode {
+            let mut file_name: String = input.to_string();
+            let pad = Self::pad(file_name.as_bytes(), true);
+
+            file_name.push_str(".enc");
+
+            let mut sub_writer = BufWriter::new(File::create(&file_name).unwrap());
+
+            sub_writer.write_all(&pad);
+            sub_writer
+        }
+        else {
+            let mut buffer = vec![0u8; 256];
+            let _ = reader.read_exact(&mut buffer).unwrap();
+
+            let _ = Self::unpad(&mut buffer);
+            let file_name = String::from_utf8(buffer).unwrap();
+    
+            BufWriter::new(File::create(file_name).unwrap())
+        };
+
+        let mut buffer = vec![0u8; max];
+
+        let whole_num = length / max;
+        let mut remainder = if whole_num > 0 { length % max }
+        else { length };
+
+        let mut i: usize = 0;
+
+        if !mode {
+            reader.seek(SeekFrom::Start(256)).unwrap();
+            remainder -= 256;
+        }
+
+        loop {
+            let total_size = reader.read(&mut buffer).unwrap();
+            if total_size == 0 { break; }
+
+            let to_process = &buffer[..total_size];
+          
+            let mut result: Vec<u8> = Vec::with_capacity(total_size);
+    
+            if i == whole_num {
+                if remainder == total_size || remainder == 0 {
+
+                   if mode {
+                       let res = self.process(&Self::pad(to_process, true));
+                       result.extend(res);
+                   }
+                   else { 
+                       let res = self.process(to_process);
+                       result.extend(res);
+                       let _ = Self::unpad(&mut result);
+                   }
+
+                }
+                else {
+                    result.extend(self.process(to_process));
+                }
+            }
+            else { 
+                result.extend(self.process(to_process));
+            }      
+
+            writer.write_all(&mut result);
+                  
+            i += 1;       
+           
+        }
+
+        writer.flush().unwrap();
+        Ok(())
+    
+    }
+
+
    
 }
 
